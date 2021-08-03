@@ -1,5 +1,9 @@
 #include "cosine_lsh.h"
 
+/*
+  构造函数  
+  创建 LSH 对象
+*/
 LSH::LSH(){
   std::cout << "LSH objected was created." << std::endl;
 }
@@ -10,17 +14,30 @@ LSH::LSH(int n_f, int n_t) {
   std::cout << "LSH objected was created." << std::endl;
 }
 
+/*
+  打开文件后获取数据的行数和维度数
+*/
 void LSH::open_file(char* argv[]) {
   this->qFile.open(argv[1]);
   this->bFile.open(argv[2]);
   this->oFile.open(argv[3]);
+  this->n_query_number = std::stoi(argv[4]);
 
   this->get_n_dimensions();
   this->get_n_lines();
 
+  // 存储结果，query 有多少行，就存储多少结果
   this->res.resize(this->n_query_lines);
+
+  std::cout << "Base file dimension : " << this->n_base_lines 
+            << " X " << this->n_dim << std::endl;
+  std::cout << "Query file dimension : " << this->n_query_lines
+            << " X " << this->n_dim << std::endl;
 }
 
+/*
+  n_tables, 2^n_functions, []
+*/
 void LSH::init_hash_table() {
   this->hashTables.resize(this->n_tables,
     std::vector<std::vector<int> > (std::pow(2, this->n_functions), std::vector<int>(1)));
@@ -30,14 +47,22 @@ void LSH::init_hash_table() {
     }
   }
   std::cout << "Hash tables' dimension: " << this->n_tables
-            << " X " << std::pow(2, this->n_functions) << " X " << 0 << std::endl;
+            << " X " << std::pow(2, this->n_functions) << std::endl;
 }
 
+
+/*
+  初始化两个哈希函数
+    一级哈希：
+        amplifyFunction， 维度是 [n_tables, n_functions-1]，每一行的取值是 [0, n_functions-1]
+    二级哈希：
+        hashFunction，维度是 [n_functions, dim-1]，获取 amplifyFunction 的值，作为一维索引
+                    ，取值范围是 0 为均值，0.2 为方差的正态分布随机数
+*/
 void LSH::init_hash_function() {
 
-
   std::default_random_engine gen(3);
-  std::normal_distribution<double> dis(0,1);
+  std::normal_distribution<double> dis(0, 0.2);
 
   this->hashFunction.resize(this->n_functions, std::vector<double>(this->n_dim));
   std::cout << "Hash function's dimension: " << this->n_functions 
@@ -58,43 +83,52 @@ void LSH::init_hash_function() {
   std::iota(ivec.begin(), ivec.end(), 0);
   std::srand ( unsigned ( std::time(0) ) );
   for (int i = 0; i < this->n_tables; i++) {
+    // 乱序并分配
     std::random_shuffle(ivec.begin(), ivec.end());
     this->amplifyFunction[i].assign(ivec.begin(), ivec.end());
   }
 }
 
+/*
+  由文件构建哈希表，放入某个表的 pos 位置的桶中
+*/
 void LSH::hash_from_file() {
   double x;
   unsigned long long sum{0};
   int pos{0};
   for (int line = 1; line <= this->n_base_lines; line++) {
-    std::cout << "Item: " << line << " was created" << std::endl;
+    std::cout << "Item: " << line << " was hashed now! " << std::endl;
     this->move_to_line(this->bFile, line);
     pos = 0;
-    for (int k = 0; k < this->n_tables; k++) {
-      for (int t = 0; t < this->n_functions; t++) {
+    for (int t = 0; t < this->n_tables; t++) {
+      for (int f = 0; f < this->n_functions; f++) {
         sum = 0;
         for (int i = 0; i < this->n_dim; i++) {
           this->bFile >> x;
-          sum += x * this->hashFunction[ this->amplifyFunction[k][t] ][i];
+          sum += x * this->hashFunction[ this->amplifyFunction[t][f] ][i];
         }
         this->move_to_line(this->bFile, line);
         if (sum > 0)
-          pos += std::pow(2, t);
+          pos += std::pow(2, f);
       }
       if (pos >= std::pow(2, this->n_functions))
         pos = std::pow(2, this->n_functions) - 1;
       // 容器追加，避免处理哈希冲突
       // std::cout << k << "===" << pos << std::endl;
-      this->hashTables[k][pos].push_back(line);
+      this->hashTables[t][pos].push_back(line);
     }
   }
-  std::cout << "Hash Table has been created !" << std::endl;
+  std::cout << "Hash Table has been created, now to save it !" << std::endl;
 }
 
+/*
+  对 query 文件的每一行进行查询
+  记录查询的平均时间
+*/
 void LSH::query_from_file() {
   double s{0.0};
   for (int line = 1; line <= this->n_query_lines; line++) {
+    // 当前行的查询与计时
     double t = this->nearest_query_cosine(line);
     s += t;
     std::cout << "Item " << line << " was queried" << std::endl;
@@ -123,6 +157,9 @@ int LSH::hash_query(int t, int line) {
   return pos;
 }
 
+/*
+  计算余弦相似度
+*/
 double LSH::calcute_cosine_distance(int base_line, int query_line) {
   double dis{0}, x{0.0}, y{0.0}, product{0.0}, x_norm{0.0}, y_norm{0.0};
 
@@ -142,13 +179,19 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
   return 1.0 - (product / x_norm * y_norm);
 }
 
+/*
+  查询最为接近的几个结果，用优先级队列存储查询结果
+*/
 double LSH::nearest_query_cosine(int line) {
   auto start = std::chrono::high_resolution_clock::now();
 
   for (int t = 0; t < this->n_tables; t++) {
+    // 查询到桶
     int pos = hash_query(t, line);
+    // 遍历这个桶
     for (auto& i: this->hashTables[t][pos]) {
       double dis = this->calcute_cosine_distance(i, line);
+      // 距离与项，按照第一项进行排序
       this->res[line-1].emplace(dis, i);
     }
   }
@@ -156,32 +199,41 @@ double LSH::nearest_query_cosine(int line) {
   std::chrono::duration<double> elapsed1 = end - start;
 
   this->oFile << "Query: " << line << std::endl;
-  this->oFile << "NN LSH Five Items:" << std::endl;
-  for (int i = 0; i < 5; i++) {
-    this->oFile << "\t" << this->res[line-1].front().first 
-                << "\t" << this->res[line-1].front().second << std::endl;
+  this->oFile << "NN LSH " << this->n_query_number << " Items:" << std::endl;
+  int cnt{0};
+  while (!this->res[line-1].empty() && cnt < this->n_query_number) {
+    this->oFile << " ==>>" << this->res[line-1].top().first 
+                << "\t" << this->res[line-1].top().second << std::endl;
     this->res[line-1].pop();
+    cnt++;
   }
-
+  
   this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
   this->oFile << "==================================================== " << std::endl;
 
   return elapsed1.count();
 }
 
+/*
+  获取数据的维度
+*/
 void LSH::get_n_dimensions() {
-  int dim{0};
+  int dim{1};
   std::string str;
   std::getline(this->bFile, str);
   for (int i = 0; i < str.size(); i++) {
-    if (str[i] != ' ')
+    if (str[i] == ' ')
       dim ++;
   }
   this->set_pointer_begin(this->bFile);
   this->n_dim = dim;
 }
 
+/*
+  获取 query 和 base 两个文件有多少行
+*/
 void LSH::get_n_lines() {
+  // base 文件
   unsigned long long lines{0};
   std::string str;
   this->set_pointer_begin(this->bFile);
@@ -190,6 +242,7 @@ void LSH::get_n_lines() {
   this->set_pointer_begin(this->bFile);
   this->n_base_lines = lines;
 
+  // query 文件
   lines = 0;
   this->set_pointer_begin(this->qFile);
   while (std::getline(qFile, str))
