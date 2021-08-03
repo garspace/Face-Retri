@@ -14,6 +14,7 @@ LSH::LSH(int n_f, int n_t) {
   std::cout << "LSH objected was created." << std::endl;
 }
 
+
 /*
   打开文件后获取数据的行数和维度数
 */
@@ -34,6 +35,7 @@ void LSH::open_file(char* argv[]) {
   std::cout << "Query file dimension : " << this->n_query_lines
             << " X " << this->n_dim << std::endl;
 }
+
 
 /*
   n_tables, 2^n_functions, []
@@ -89,6 +91,7 @@ void LSH::init_hash_function() {
   }
 }
 
+
 /*
   由文件构建哈希表，放入某个表的 pos 位置的桶中
 */
@@ -96,7 +99,7 @@ void LSH::hash_from_file() {
   double x;
   unsigned long long sum{0};
   int pos{0};
-  for (int line = 1; line <= this->n_base_lines; line++) {
+  for (int line = 0; line < this->n_base_lines; line++) {
     std::cout << "Item: " << line << " was hashed now! " << std::endl;
     this->move_to_line(this->bFile, line);
     pos = 0;
@@ -114,12 +117,12 @@ void LSH::hash_from_file() {
       if (pos >= std::pow(2, this->n_functions))
         pos = std::pow(2, this->n_functions) - 1;
       // 容器追加，避免处理哈希冲突
-      // std::cout << k << "===" << pos << std::endl;
       this->hashTables[t][pos].push_back(line);
     }
   }
   std::cout << "Hash Table has been created, now to save it !" << std::endl;
 }
+
 
 /*
   对 query 文件的每一行进行查询
@@ -127,7 +130,7 @@ void LSH::hash_from_file() {
 */
 void LSH::query_from_file() {
   double s{0.0};
-  for (int line = 1; line <= this->n_query_lines; line++) {
+  for (int line = 0; line < this->n_query_lines; line++) {
     // 当前行的查询与计时
     double t = this->nearest_query_cosine(line);
     s += t;
@@ -136,6 +139,7 @@ void LSH::query_from_file() {
   oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
 }
 
+
 int LSH::hash_query(int t, int line) {
   this->move_to_line(this->qFile, line);
   
@@ -143,7 +147,7 @@ int LSH::hash_query(int t, int line) {
   double x{0.0};
   int pos{0};
 
-  for (int i = 0; i < this->n_tables; i++) {
+  for (int i = 0; i < this->n_functions; i++) {
     sum = 0;
     for (int j = 0; j < this->n_dim; j++) {
       this->qFile >> x;
@@ -153,12 +157,15 @@ int LSH::hash_query(int t, int line) {
     if (sum > 0)
       pos += std::pow(2, i);
   }
-  
   return pos;
 }
 
+
 /*
-  计算余弦相似度
+  计算余弦相似度，取值范围是 [-1, 1]
+    -1 完全相反
+    0 毫无关系
+    1 正相关
 */
 double LSH::calcute_cosine_distance(int base_line, int query_line) {
   double dis{0}, x{0.0}, y{0.0}, product{0.0}, x_norm{0.0}, y_norm{0.0};
@@ -175,9 +182,11 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
   }
   x_norm = std::sqrt(x_norm);
   y_norm = std::sqrt(y_norm);
+  // std::cout << x_norm << "==" << y_norm << std::endl;
 
-  return 1.0 - (product / x_norm * y_norm);
+  return (product / (x_norm * y_norm));
 }
+
 
 /*
   查询最为接近的几个结果，用优先级队列存储查询结果
@@ -214,6 +223,7 @@ double LSH::nearest_query_cosine(int line) {
   return elapsed1.count();
 }
 
+
 /*
   获取数据的维度
 */
@@ -228,6 +238,7 @@ void LSH::get_n_dimensions() {
   this->set_pointer_begin(this->bFile);
   this->n_dim = dim;
 }
+
 
 /*
   获取 query 和 base 两个文件有多少行
@@ -251,10 +262,12 @@ void LSH::get_n_lines() {
   this->n_query_lines = lines;
 }
 
+
 void LSH::set_pointer_begin(std::ifstream& f) {
   f.clear();
   f.seekg(0, std::ios::beg);
 }
+
 
 void LSH::move_to_line(std::ifstream& f, int line) {
   std::string s;
@@ -263,6 +276,7 @@ void LSH::move_to_line(std::ifstream& f, int line) {
   for (int i = 0; i < line; i++)
     std::getline(bFile, s);
 }
+
 
 void LSH::finish() {
   this->bFile.close();
