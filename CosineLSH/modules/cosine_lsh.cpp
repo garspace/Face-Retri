@@ -5,24 +5,22 @@
   创建 LSH 对象
 */
 LSH::LSH(){
-  std::cout << "LSH objected was created." << std::endl;
 }
 
 LSH::LSH(int n_f, int n_t) {
   this->n_functions = n_f;
   this->n_tables = n_t;
-  std::cout << "LSH objected was created." << std::endl;
 }
 
 
 /*
   打开文件后获取数据的行数和维度数
 */
-void LSH::open_file(char* argv[]) {
-  this->qFile.open(argv[1]);
-  this->bFile.open(argv[2]);
-  this->oFile.open(argv[3]);
-  this->n_query_number = std::stoi(argv[4]);
+void LSH::open_file(Config& c) {
+  this->qFile.open(c.get_query_file_path());
+  this->bFile.open(c.get_base_file_path());
+  this->oFile.open(c.get_out_file_path());
+  this->n_query_number = c.get_n_query_number();
 
   this->get_n_dimensions();
   this->get_n_lines();
@@ -30,9 +28,9 @@ void LSH::open_file(char* argv[]) {
   // 存储结果，query 有多少行，就存储多少结果
   this->res.resize(this->n_query_lines);
 
-  std::cout << "Base file dimension : " << this->n_base_lines 
+  this->oFile << "Base file dimension : " << this->n_base_lines 
             << " X " << this->n_dim << std::endl;
-  std::cout << "Query file dimension : " << this->n_query_lines
+  this->oFile << "Query file dimension : " << this->n_query_lines
             << " X " << this->n_dim << std::endl;
 }
 
@@ -48,7 +46,7 @@ void LSH::init_hash_table() {
       this->hashTables[i][j].resize(0);
     }
   }
-  std::cout << "Hash tables' dimension: " << this->n_tables
+  this->oFile << "Hash tables' dimension: " << this->n_tables
             << " X " << std::pow(2, this->n_functions) << std::endl;
 }
 
@@ -67,7 +65,7 @@ void LSH::init_hash_function() {
   std::normal_distribution<double> dis(0, 0.2);
 
   this->hashFunction.resize(this->n_functions, std::vector<double>(this->n_dim));
-  std::cout << "Hash function's dimension: " << this->n_functions 
+  this->oFile << "Hash function's dimension: " << this->n_functions 
             << " X " << this->n_dim << std::endl;
   
   for (int i = 0; i < this->n_functions; i++) {
@@ -78,7 +76,7 @@ void LSH::init_hash_function() {
   }
   
   this->amplifyFunction.resize(this->n_tables, std::vector<int>(this->n_functions));
-  std::cout << "amplify function's dimension: " << this->n_tables 
+  this->oFile << "amplify function's dimension: " << this->n_tables 
             << " X " << this->n_functions << std::endl;
   
   std::vector<int> ivec(this->n_functions);
@@ -96,11 +94,12 @@ void LSH::init_hash_function() {
   由文件构建哈希表，放入某个表的 pos 位置的桶中
 */
 void LSH::hash_from_file() {
-  double x;
-  unsigned long long sum{0};
+  double x, sum{0};
   int pos{0};
+  auto start = std::chrono::high_resolution_clock::now();
   for (int line = 0; line < this->n_base_lines; line++) {
-    std::cout << "Item: " << line << " was hashed now! " << std::endl;
+    if (line % 500 == 499)
+      this->oFile << line << " items has been hashed ! " << std::endl;
     this->move_to_line(this->bFile, line);
     pos = 0;
     for (int t = 0; t < this->n_tables; t++) {
@@ -120,7 +119,10 @@ void LSH::hash_from_file() {
       this->hashTables[t][pos].push_back(line);
     }
   }
-  std::cout << "Hash Table has been created, now to save it !" << std::endl;
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed1 = end - start;
+  this->oFile << "After " << elapsed1.count() << " seconds, "
+            << "Hash Table has been created, now to save it !" << std::endl;
 }
 
 
@@ -134,17 +136,16 @@ void LSH::query_from_file() {
     // 当前行的查询与计时
     double t = this->nearest_query_cosine(line);
     s += t;
-    std::cout << "Item " << line << " was queried" << std::endl;
+    this->oFile << "Item " << line << " was queried" << std::endl;
   }
-  oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
+  this->oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
 }
 
 
 int LSH::hash_query(int t, int line) {
+  auto start = std::chrono::high_resolution_clock::now();
   this->move_to_line(this->qFile, line);
-  
-  unsigned long long int sum{0};
-  double x{0.0};
+  double sum{0}, x{0.0};
   int pos{0};
 
   for (int i = 0; i < this->n_functions; i++) {
@@ -157,6 +158,10 @@ int LSH::hash_query(int t, int line) {
     if (sum > 0)
       pos += std::pow(2, i);
   }
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed1 = end - start;
+  this->oFile << "Item " << line << " hash query cost " << elapsed1.count()
+              << " seconds." << std::endl;
   return pos;
 }
 
@@ -182,8 +187,8 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
   }
   x_norm = std::sqrt(x_norm);
   y_norm = std::sqrt(y_norm);
-  // std::cout << x_norm << "==" << y_norm << std::endl;
-
+  if (std::abs(x_norm * y_norm) < 1e-6)
+    return -1;
   return (product / (x_norm * y_norm));
 }
 
@@ -192,6 +197,7 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
   查询最为接近的几个结果，用优先级队列存储查询结果
 */
 double LSH::nearest_query_cosine(int line) {
+  this->oFile << "Query: " << line << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
 
   for (int t = 0; t < this->n_tables; t++) {
@@ -206,12 +212,11 @@ double LSH::nearest_query_cosine(int line) {
   }
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
+  this->oFile << "NN LSH " << " Items:" << std::endl;
 
-  this->oFile << "Query: " << line << std::endl;
-  this->oFile << "NN LSH " << this->n_query_number << " Items:" << std::endl;
   int cnt{0};
   while (!this->res[line-1].empty() && cnt < this->n_query_number) {
-    this->oFile << " ==>>" << this->res[line-1].top().first 
+    this->oFile << " ==>> " << this->res[line-1].top().first 
                 << "\t" << this->res[line-1].top().second << std::endl;
     this->res[line-1].pop();
     cnt++;
@@ -232,7 +237,7 @@ void LSH::get_n_dimensions() {
   std::string str;
   std::getline(this->bFile, str);
   for (int i = 0; i < str.size(); i++) {
-    if (str[i] == ' ')
+    if (str[i] == '\t')
       dim ++;
   }
   this->set_pointer_begin(this->bFile);
@@ -262,6 +267,9 @@ void LSH::get_n_lines() {
   this->n_query_lines = lines;
 }
 
+/*
+  每次建立哈希表都太慢了保存哈希表
+*/
 
 void LSH::set_pointer_begin(std::ifstream& f) {
   f.clear();
@@ -274,7 +282,7 @@ void LSH::move_to_line(std::ifstream& f, int line) {
   f.clear();
   f.seekg(0, std::ios::beg);
   for (int i = 0; i < line; i++)
-    std::getline(bFile, s);
+    std::getline(f, s);
 }
 
 

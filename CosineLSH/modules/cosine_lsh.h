@@ -10,6 +10,7 @@
 #include <numeric>    // 递增序列
 #include <queue>      // 优先级队列
 #include <utility>    // 使用 pair
+#include "config.cpp"
 
 using PDI = std::pair<double, int>;
 
@@ -54,13 +55,16 @@ private:
   // 保存结果的文件
   std::ofstream oFile;
 
+  // 保存哈希表的路径
+  std::ofstream sFile;
+
 public:
   // 构造函数 
   LSH();
   LSH(int, int);
   
   // 打开文件
-  void open_file(char* argv[]);
+  void open_file(Config&);
 
   // 初始化哈希函数和哈希表
   void init_hash_table();
@@ -92,4 +96,7 @@ public:
 
   // 结束时关闭文件
   void finish();
+
+  // 保存哈希表，每次构建都太慢了
+  void save_hashTable();
 };

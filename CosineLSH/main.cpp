@@ -2,23 +2,31 @@
 
 int main (int argc, char *argv[]) {
 
-    int n_t{1},  n_f{10};
-    LSH lsh = LSH(n_f, n_t);
+	Config c = Config();
 
-    // query base out
-    lsh.open_file(argv);
+	// 哈希表的函数数量，哈希表的数量
+	LSH lsh = LSH(c.get_n_functoin(), c.get_n_table());
 
-    // initialize
-    lsh.init_hash_table();
-    lsh.init_hash_function();
-    
-    // create hash table
-    lsh.hash_from_file();
+	// query base out
+	lsh.open_file(c);
 
-    // query from hash table
-    lsh.query_from_file();
+	if (c.get_read_hash()) {
+		
+	}
+	// 不读入就重新构建
+	else {
+		// initialize
+		lsh.init_hash_table();
+		lsh.init_hash_function();
 
-    // close files
-    lsh.finish();
-    return 0;
+		// create hash table
+		lsh.hash_from_file();
+	}
+
+	// query from hash table
+	lsh.query_from_file();
+
+	// close files
+	lsh.finish();
+	return 0;
 }
