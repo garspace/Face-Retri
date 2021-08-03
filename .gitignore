@@ -1,0 +1,8 @@
+build/*
+*.bin
+FaceAlignment/build
+*.out
+*.log
+base
+out
+query
