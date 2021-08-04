@@ -99,7 +99,7 @@ void LSH::hash_from_file() {
   auto start = std::chrono::high_resolution_clock::now();
   for (int line = 0; line < this->n_base_lines; line++) {
     if (line % 500 == 499)
-      this->oFile << line << " items has been hashed ! " << std::endl;
+      this->oFile << line + 1 << " items has been hashed ! " << std::endl;
     this->move_to_line(this->bFile, line);
     pos = 0;
     for (int t = 0; t < this->n_tables; t++) {

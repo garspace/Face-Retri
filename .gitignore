@@ -6,3 +6,4 @@ FaceAlignment/build
 base
 out
 query
+*.drawio
