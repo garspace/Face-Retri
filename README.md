@@ -25,11 +25,17 @@ sudo pacman -S opencv vtk hdfs5
 
 注意，如果出现地址错误或内存溢出等，注意检查模型、图片、链接库的路径，其实这些路径都是要自己改的。
 
+编译通过后，调用 [特征提取](https://github.com/muyuuuu/SeetaFace-Retri/blob/main/FaceIdentification/src/test/face_image_extract.cpp)，生成人脸图像的特征数据并保存。 
+
 ## 局部敏感哈希算法 :bulb:
 
 参考了 [cchatzis](https://github.com/cchatzis/Nearest-Neighbour-LSH) 的程序，他这边接口写的很明确了，但是程序有很多错误。我又好好研究一下 LSH 算法，重写了一版新的代码。
 
-# 部署 :fire:
+- [] 保存哈希函数、哈希表
+- [] 读取配置文件
+- [] 读取哈希函数、哈希表，直接查询
+
+## 部署 :fire:
 
 暂时按照如下结构部署到服务器，`Java` 施工中。
 

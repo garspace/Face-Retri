@@ -144,20 +144,17 @@ void save_data(ofstream& file, std::vector<cv::String>& imagePathList,
 
 int main(int argc, char* argv[]) {
   // 参数检查 ================================================================
-  // 第一个参数表示当前处理数据集还是查询数据
-  // 第二个参数表示图像的路径
-  // 第三个参数表示提取特征的存储路径
-  if (argc != 4) {
+  // 第一个参数表示图像的路径
+  // 第二个参数表示提取特征的存储路径
+  if (argc != 3) {
     std::cout << "Please input path of query data and data base." << std::endl;
     return 0;
   }
 
-  // 如果是 0，提取查询数据特征并存储
-  // 如果是 1，提取数据集特征并存储
-  int isQuery = std::stoi(argv[1]);
 
   // 读取图像的路径
   cv::String folder = argv[2];
+  // 保存特征的路径
   std::string save_path = argv[3];
 
   // cmake ..; make; ./src/test/face_image_extract.bin 0 /home/muyu/Documents/github/SeetaFaceEngine-master/FaceIdentification/data/test_face_recognizer/images/query /home/muyu/Documents/github/SeetaFaceEngine-master/FaceIdentification/build/

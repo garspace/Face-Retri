@@ -7,3 +7,4 @@ base
 out
 query
 *.drawio
+*.vscode/
