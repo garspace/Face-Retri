@@ -10,7 +10,6 @@
 #include <numeric>    // 递增序列
 #include <queue>      // 优先级队列
 #include <utility>    // 使用 pair
-#include "config.cpp"
 
 using PDI = std::pair<double, int>;
 
@@ -34,6 +33,9 @@ private:
   // 每个查询数据，最多允许的查询结果数
   int n_query_number{100};
 
+  // 是否保存结果
+  bool save{false};
+
   // 优先级队列，存储结果，选择相似度最接近的
   std::vector<std::priority_queue<PDI> > res;
 
@@ -56,15 +58,17 @@ private:
   std::ofstream oFile;
 
   // 保存哈希表的路径
-  std::ofstream sFile;
+  std::ofstream hash_table;
+  std::ofstream hash_function;
+  std::ofstream amp_function;
 
 public:
   // 构造函数 
   LSH();
-  LSH(int, int);
-  
-  // 打开文件
-  void open_file(Config&);
+  LSH(std::string);
+
+  // 解析配置文件
+  void parse_config(std::string s);
 
   // 初始化哈希函数和哈希表
   void init_hash_table();
@@ -98,5 +102,5 @@ public:
   void finish();
 
   // 保存哈希表，每次构建都太慢了
-  void save_hashTable();
+  void save_data();
 };

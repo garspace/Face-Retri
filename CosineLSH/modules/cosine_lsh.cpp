@@ -7,23 +7,47 @@
 LSH::LSH(){
 }
 
-LSH::LSH(int n_f, int n_t) {
-  this->n_functions = n_f;
-  this->n_tables = n_t;
+LSH::LSH(std::string s) {
+  this->parse_config(s);
 }
 
-
 /*
-  打开文件后获取数据的行数和维度数
+  解析配置文件
 */
-void LSH::open_file(Config& c) {
-  this->qFile.open(c.get_query_file_path());
-  this->bFile.open(c.get_base_file_path());
-  this->oFile.open(c.get_out_file_path());
-  this->n_query_number = c.get_n_query_number();
+void LSH::parse_config(std::string s) {
+  std::ifstream temp;
+  std::string str;
+  temp.open(s);
+  int n_t;
 
-  this->get_n_dimensions();
+  // 读取哈希表的数
+  temp >> n_t;
+  this->n_tables = n_t;
+
+  // 读取哈希函数的数目
+  temp >> n_t;
+  this->n_functions = n_t;
+
+  // 读取每张图片返回多少查询结果
+  temp >> n_t;
+  this->n_query_number = n_t;
+
+  // base file 路径
+  temp >> str;
+  this->bFile.open(str);
+
+  // query file 路径
+  temp >> str;
+  this->qFile.open(str);
+
+  // out file 路径
+  temp >> str;
+  this->oFile.open(str);
+
+  // base query 文件有多少行
   this->get_n_lines();
+  // 数据维度
+  this->get_n_dimensions();
 
   // 存储结果，query 有多少行，就存储多少结果
   this->res.resize(this->n_query_lines);
@@ -32,6 +56,24 @@ void LSH::open_file(Config& c) {
             << " X " << this->n_dim << std::endl;
   this->oFile << "Query file dimension : " << this->n_query_lines
             << " X " << this->n_dim << std::endl;
+
+  // 保存文件的路径，默认为空
+  temp >> n_t;
+  // 保存哈希表等数据
+  if (n_t == 1) {
+    this->save = true;
+
+    temp >> str;
+    this->hash_table.open(str);
+
+    temp >> str;
+    this->hash_function.open(str);
+
+    temp >> str;
+    this->amp_function.open(str);
+  }
+
+  temp.close();
 }
 
 
@@ -122,7 +164,63 @@ void LSH::hash_from_file() {
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
   this->oFile << "After " << elapsed1.count() << " seconds, "
-            << "Hash Table has been created, now to save it !" << std::endl;
+            << "Hash Table has been created ! " << std::endl;
+
+  // 保存数据
+  if (this->save == true) {
+    this->save_data();
+  }
+}
+
+/*
+  保存结果
+*/
+void LSH::save_data() {
+  
+  // 保存哈希表
+  this->hash_table << this->n_tables << " " << std::pow(2, this->n_functions) << std::endl;
+  for (int i = 0; i < this->n_tables; i++) {
+		for (int j = 0; j < std::pow(2, this->n_functions); j++) {
+			for (int k = 0; k < this->hashTables[i][j].size(); k++) {
+				if (k == 0)
+					this->hash_table << this->hashTables[i][j][k];
+				else
+					this->hash_table << " " << this->hashTables[i][j][k];
+			}
+			if (i == this->n_tables-1 && j == std::pow(2, this->n_functions)-1)
+				continue;
+			this->hash_table << std::endl;
+		}
+	}
+  this->hash_table.close();
+  
+  // 保存 hash functoin
+  this->hash_function << this->n_functions << " " << this->n_dim << std::endl;
+  for (int i = 0; i < this->n_functions; i++) {
+    for (int j = 0; j < this->n_dim; j++) {
+      if (j == 0)
+        this->hash_function << this->hashFunction[i][j];
+      else
+        this->hash_function << " " << this->hashFunction[i][j];
+    }
+    if (i != this->n_functions-1)
+      this->hash_function << std::endl;
+  }
+  this->hash_function.close();
+
+  // 保存 amp function
+  this->amp_function << this->n_tables << " " << this->n_functions << std::endl;
+  for (int i = 0; i < this->n_tables; i++) {
+    for (int j = 0; j < this->n_functions; j++) {
+      if (j == 0)
+        this->amp_function << this->amplifyFunction[i][j];
+      else
+        this->amp_function << " " << this->amplifyFunction[i][j];
+    }
+    if (i != this->n_tables-1)
+      this->amp_function << std::endl;
+  }
+  this->amp_function.close();
 }
 
 

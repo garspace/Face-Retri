@@ -8,3 +8,6 @@ out
 query
 *.drawio
 *.vscode/
+hash_table
+hash_function
+amplify_function
