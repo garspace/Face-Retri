@@ -57,6 +57,21 @@ void LSH::parse_config(std::string s) {
   this->oFile << "Query file dimension : " << this->n_query_lines
             << " X " << this->n_dim << std::endl;
 
+  // 从文件读取哈希表
+  temp >> n_t;
+  if (n_t == 1) {
+    this->read = true;
+
+    temp >> str;
+    this->r_p_hash_table.open(str);
+
+    temp >> str;
+    this->r_p_hash_function.open(str);
+
+    temp >> str;
+    this->r_p_amp_function.open(str);
+  }
+
   // 保存文件的路径，默认为空
   temp >> n_t;
   // 保存哈希表等数据
@@ -64,18 +79,73 @@ void LSH::parse_config(std::string s) {
     this->save = true;
 
     temp >> str;
-    this->hash_table.open(str);
+    this->s_p_hash_table.open(str);
 
     temp >> str;
-    this->hash_function.open(str);
+    this->s_p_hash_function.open(str);
 
     temp >> str;
-    this->amp_function.open(str);
+    this->s_p_amp_function.open(str);
   }
-
   temp.close();
 }
 
+bool LSH::get_isRead() const {
+  return this->read;
+}
+
+void LSH::read_data() {
+  // 读取哈希表
+  int n_t, n_f;
+  std::string str;
+
+  this->r_p_hash_table >> n_t >> n_f;
+  this->n_tables = n_t;
+  this->n_functions = std::log2(n_f);
+
+  this->init_hash_table();
+  int cnt{0}, x;
+  double y;
+  for (int i = 0; i < this->n_tables; i++) {
+    for (int j = 0; j < std::pow(2, this->n_functions); j++) {
+      std::getline(this->r_p_hash_table, str);
+      std::stringstream s{str};
+      while (s >> x) {
+        this->hashTables[i][j].push_back(x);
+      }
+    }
+  }
+  this->r_p_hash_table.close();
+  
+  // 读取二级哈希 function dim
+  this->r_p_hash_function >> n_t >> n_f;
+  this->n_functions = n_t;
+  this->n_dim = n_f;
+  this->hashFunction.resize(this->n_functions, std::vector<double>(this->n_dim));
+
+  for (int i = 0; i < this->n_functions; i++) {
+    for (int j = 0; j < this->n_dim; j++) {
+      this->r_p_hash_function >> y;
+      this->hashFunction[i][j] = y;
+    }
+  }
+  this->oFile << "Hash function's dimension: " << this->n_functions 
+            << " X " << this->n_dim << std::endl;
+  this->r_p_hash_function.close();
+
+  // 读取一级哈希函数
+  this->r_p_amp_function >> n_t >> n_f;
+  this->amplifyFunction.resize(this->n_tables, std::vector<int>(this->n_functions));
+  this->oFile << "amplify function's dimension: " << this->n_tables 
+            << " X " << this->n_functions << std::endl;
+  for (int i = 0; i < this->n_tables; i++) {
+    for (int j = 0; j < this->n_functions; j++) {
+      this->r_p_amp_function >> x;
+      this->amplifyFunction[i][j] = x;
+    }
+  }
+  this->r_p_amp_function.close();
+}
 
 /*
   n_tables, 2^n_functions, []
@@ -181,49 +251,49 @@ void LSH::hash_from_file() {
 void LSH::save_data() {
   
   // 保存哈希表
-  this->hash_table << this->n_tables << " " << std::pow(2, this->n_functions) << std::endl;
+  this->s_p_hash_table << this->n_tables << " " << std::pow(2, this->n_functions) << std::endl;
   for (int i = 0; i < this->n_tables; i++) {
 		for (int j = 0; j < std::pow(2, this->n_functions); j++) {
 			for (int k = 0; k < this->hashTables[i][j].size(); k++) {
 				if (k == 0)
-					this->hash_table << this->hashTables[i][j][k];
+					this->s_p_hash_table << this->hashTables[i][j][k];
 				else
-					this->hash_table << " " << this->hashTables[i][j][k];
+					this->s_p_hash_table << " " << this->hashTables[i][j][k];
 			}
 			if (i == this->n_tables-1 && j == std::pow(2, this->n_functions)-1)
 				continue;
-			this->hash_table << std::endl;
+			this->s_p_hash_table << std::endl;
 		}
 	}
-  this->hash_table.close();
+  this->s_p_hash_table.close();
   
   // 保存 hash functoin
-  this->hash_function << this->n_functions << " " << this->n_dim << std::endl;
+  this->s_p_hash_function << this->n_functions << " " << this->n_dim << std::endl;
   for (int i = 0; i < this->n_functions; i++) {
     for (int j = 0; j < this->n_dim; j++) {
       if (j == 0)
-        this->hash_function << this->hashFunction[i][j];
+        this->s_p_hash_function << this->hashFunction[i][j];
       else
-        this->hash_function << " " << this->hashFunction[i][j];
+        this->s_p_hash_function << " " << this->hashFunction[i][j];
     }
     if (i != this->n_functions-1)
-      this->hash_function << std::endl;
+      this->s_p_hash_function << std::endl;
   }
-  this->hash_function.close();
+  this->s_p_hash_function.close();
 
   // 保存 amp function
-  this->amp_function << this->n_tables << " " << this->n_functions << std::endl;
+  this->s_p_amp_function << this->n_tables << " " << this->n_functions << std::endl;
   for (int i = 0; i < this->n_tables; i++) {
     for (int j = 0; j < this->n_functions; j++) {
       if (j == 0)
-        this->amp_function << this->amplifyFunction[i][j];
+        this->s_p_amp_function << this->amplifyFunction[i][j];
       else
-        this->amp_function << " " << this->amplifyFunction[i][j];
+        this->s_p_amp_function << " " << this->amplifyFunction[i][j];
     }
     if (i != this->n_tables-1)
-      this->amp_function << std::endl;
+      this->s_p_amp_function << std::endl;
   }
-  this->amp_function.close();
+  this->s_p_amp_function.close();
 }
 
 
@@ -258,6 +328,10 @@ int LSH::hash_query(int t, int line) {
     this->move_to_line(this->qFile, line);
     if (sum > 0)
       pos += std::pow(2, i);
+  }
+  if (pos >= std::pow(2, this->n_functions)) {
+    int a = std::pow(2, this->n_functions);
+    pos %= a;
   }
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
@@ -308,7 +382,7 @@ double LSH::nearest_query_cosine(int line) {
     for (auto& i: this->hashTables[t][pos]) {
       double dis = this->calcute_cosine_distance(i, line);
       // 距离与项，按照第一项进行排序
-      this->res[line-1].emplace(dis, i);
+      this->res[line].emplace(dis, i);
     }
   }
   auto end = std::chrono::high_resolution_clock::now();
@@ -316,10 +390,10 @@ double LSH::nearest_query_cosine(int line) {
   this->oFile << "NN LSH " << " Items:" << std::endl;
 
   int cnt{0};
-  while (!this->res[line-1].empty() && cnt < this->n_query_number) {
-    this->oFile << " ==>> " << this->res[line-1].top().first 
-                << "\t" << this->res[line-1].top().second << std::endl;
-    this->res[line-1].pop();
+  while (!this->res[line].empty() && cnt < this->n_query_number) {
+    this->oFile << " ==>> " << this->res[line].top().first 
+                << "\t" << this->res[line].top().second << std::endl;
+    this->res[line].pop();
     cnt++;
   }
   

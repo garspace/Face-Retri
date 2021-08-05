@@ -5,13 +5,19 @@ int main (int argc, char *argv[]) {
 	// 哈希表的函数数量，哈希表的数量
 	LSH lsh = LSH("modules/config");
 
-	// initialize
-	lsh.init_hash_table();
-	lsh.init_hash_function();
+	// 从文件读入哈希表？
+	if (lsh.get_isRead() ) {
+		lsh.read_data();
+	}
+	// 否则
+	else {
+		// initialize
+		lsh.init_hash_table();
+		lsh.init_hash_function();
 
-	// create hash table
-	lsh.hash_from_file();
-
+		// create hash table
+		lsh.hash_from_file();
+	}
 	// query from hash table
 	lsh.query_from_file();
 

@@ -29,11 +29,7 @@ sudo pacman -S opencv vtk hdfs5
 
 ## 局部敏感哈希算法 :bulb:
 
-参考了 [cchatzis](https://github.com/cchatzis/Nearest-Neighbour-LSH) 的程序，他这边接口写的很明确了，但是程序有很多错误。我又好好研究一下 LSH 算法，重写了一版新的代码。
-
--[x] 保存哈希函数、哈希表
--[] 读取配置文件
--[] 读取哈希函数、哈希表，直接查询
+参考了 [cchatzis](https://github.com/cchatzis/Nearest-Neighbour-LSH) 的程序，他这边接口写的很明确了，但是程序有很多错误。我又好好研究一下 LSH 算法，重写了一版新的代码，进行了优化和改进。
 
 ## 部署 :fire:
 

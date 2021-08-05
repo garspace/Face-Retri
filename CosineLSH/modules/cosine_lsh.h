@@ -10,6 +10,7 @@
 #include <numeric>    // 递增序列
 #include <queue>      // 优先级队列
 #include <utility>    // 使用 pair
+#include <sstream>    // 使用字符串流
 
 using PDI = std::pair<double, int>;
 
@@ -36,6 +37,9 @@ private:
   // 是否保存结果
   bool save{false};
 
+  // 是否读取文件构造哈希表
+  bool read{false};
+
   // 优先级队列，存储结果，选择相似度最接近的
   std::vector<std::priority_queue<PDI> > res;
 
@@ -57,10 +61,15 @@ private:
   // 保存结果的文件
   std::ofstream oFile;
 
-  // 保存哈希表的路径
-  std::ofstream hash_table;
-  std::ofstream hash_function;
-  std::ofstream amp_function;
+  // 保存哈希表的路径 save path
+  std::ofstream s_p_hash_table;
+  std::ofstream s_p_hash_function;
+  std::ofstream s_p_amp_function;
+
+  // 读取哈希表的路径 read path
+  std::ifstream r_p_hash_table;
+  std::ifstream r_p_hash_function;
+  std::ifstream r_p_amp_function;
 
 public:
   // 构造函数 
@@ -103,4 +112,9 @@ public:
 
   // 保存哈希表，每次构建都太慢了
   void save_data();
+
+  // 读取文件，既然构建太慢，考虑直接读取哈希表和哈希函数实现查询
+  void read_data();
+
+  bool get_isRead() const;
 };
