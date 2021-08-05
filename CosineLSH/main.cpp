@@ -6,11 +6,7 @@ int main (int argc, char *argv[]) {
 	LSH lsh = LSH("modules/config");
 
 	// 从文件读入哈希表？
-	if (lsh.get_isRead() ) {
-		lsh.read_data();
-	}
-	// 否则
-	else {
+	if (!lsh.get_isRead() ) {
 		// initialize
 		lsh.init_hash_table();
 		lsh.init_hash_function();

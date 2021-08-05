@@ -59,6 +59,7 @@ void LSH::parse_config(std::string s) {
 
   // 从文件读取哈希表
   temp >> n_t;
+  
   if (n_t == 1) {
     this->read = true;
 
@@ -70,8 +71,15 @@ void LSH::parse_config(std::string s) {
 
     temp >> str;
     this->r_p_amp_function.open(str);
-  }
 
+    // 读取数据
+    this->read_data();
+  }
+  if (n_t == 0) {
+    temp >> str;
+    temp >> str;
+    temp >> str;
+  }
   // 保存文件的路径，默认为空
   temp >> n_t;
   // 保存哈希表等数据
@@ -86,6 +94,11 @@ void LSH::parse_config(std::string s) {
 
     temp >> str;
     this->s_p_amp_function.open(str);
+  }
+
+  // 即读取也保存，则扩容，但不建议扩容太猛
+  if (this->read == true && this->save == true) {
+    this->hash_from_file();
   }
   temp.close();
 }
@@ -294,6 +307,11 @@ void LSH::save_data() {
       this->s_p_amp_function << std::endl;
   }
   this->s_p_amp_function.close();
+
+  this->oFile << "Hash Table, Hash Function, AmplifyFunction has been saved. "
+              << std::endl
+              << "===================================================="
+              << std::endl;
 }
 
 
@@ -307,7 +325,6 @@ void LSH::query_from_file() {
     // 当前行的查询与计时
     double t = this->nearest_query_cosine(line);
     s += t;
-    this->oFile << "Item " << line << " was queried" << std::endl;
   }
   this->oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
 }
@@ -336,7 +353,7 @@ int LSH::hash_query(int t, int line) {
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
   this->oFile << "Item " << line << " hash query cost " << elapsed1.count()
-              << " seconds." << std::endl;
+              << " seconds in Table " << t << std::endl;
   return pos;
 }
 
@@ -398,7 +415,8 @@ double LSH::nearest_query_cosine(int line) {
   }
   
   this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
-  this->oFile << "==================================================== " << std::endl;
+  this->oFile << "Item " << line << " has been queried" << std::endl;
+  this->oFile << "====================================================" << std::endl;
 
   return elapsed1.count();
 }
