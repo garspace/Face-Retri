@@ -155,8 +155,11 @@ void LSH::hash_from_file() {
         if (sum > 0)
           pos += std::pow(2, f);
       }
-      if (pos >= std::pow(2, this->n_functions))
-        pos = std::pow(2, this->n_functions) - 1;
+      // 越界处理
+      if (pos >= std::pow(2, this->n_functions)) {
+          int a = std::pow(2, this->n_functions);
+          pos %= a;
+        }
       // 容器追加，避免处理哈希冲突
       this->hashTables[t][pos].push_back(line);
     }
