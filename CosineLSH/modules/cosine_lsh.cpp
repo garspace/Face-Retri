@@ -15,6 +15,9 @@ LSH::LSH(std::string s) {
   解析配置文件
 */
 void LSH::parse_config(std::string s) {
+  // 保留两位小数
+  this->oFile << std::fixed << std::setprecision(2);
+  
   std::ifstream temp;
   std::string str;
   temp.open(s);
@@ -165,7 +168,7 @@ void LSH::read_data() {
 */
 void LSH::init_hash_table() {
   this->hashTables.resize(this->n_tables,
-    std::vector<std::vector<int> > (std::pow(2, this->n_functions), std::vector<int>(1)));
+    std::vector<std::list<int> > (std::pow(2, this->n_functions), std::list<int>(0)));
   for (int i = 0; i < this->n_tables; i++) {
     for (int j = 0; j < std::pow(2, this->n_functions); j++) {
       this->hashTables[i][j].resize(0);
@@ -221,36 +224,51 @@ void LSH::init_hash_function() {
 void LSH::hash_from_file() {
   double x, sum{0};
   int pos{0};
+  std::vector<double> tmp;
   auto start = std::chrono::high_resolution_clock::now();
+
+  // 处理每一条数据
   for (int line = 0; line < this->n_base_lines; line++) {
-    if (line % 500 == 499)
-      this->oFile << line + 1 << " items has been hashed ! " << std::endl;
+    if (line % 500 == 499) {
+      auto end = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> elapsed1 = end - start;
+      this->oFile << "After " << elapsed1.count() << " seconds, "
+                << line + 1 <<  " items has been hashed ! " << std::endl;
+    }
+
     this->move_to_line(this->bFile, line);
-    pos = 0;
+
+    // 空间换时间
+    tmp.clear();
+    for (int i = 0; i < this->n_dim; i++) {
+      this->bFile >> x;
+      tmp.push_back(x);
+    }
+
+    // 处理每一张表
     for (int t = 0; t < this->n_tables; t++) {
+      
+      pos = 0;
+
+      // 每一个函数
       for (int f = 0; f < this->n_functions; f++) {
         sum = 0;
         for (int i = 0; i < this->n_dim; i++) {
-          this->bFile >> x;
-          sum += x * this->hashFunction[ this->amplifyFunction[t][f] ][i];
+          sum += tmp[i] * this->hashFunction[ this->amplifyFunction[t][f] ][i];
         }
-        this->move_to_line(this->bFile, line);
         if (sum > 0)
           pos += std::pow(2, f);
       }
       // 越界处理
       if (pos >= std::pow(2, this->n_functions)) {
+          // 2^9 = 511.9998 -> 511
           int a = std::pow(2, this->n_functions);
           pos %= a;
-        }
+      }
       // 容器追加，避免处理哈希冲突
       this->hashTables[t][pos].push_back(line);
     }
   }
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed1 = end - start;
-  this->oFile << "After " << elapsed1.count() << " seconds, "
-            << "Hash Table has been created ! " << std::endl;
 
   // 保存数据
   if (this->save == true) {
@@ -264,14 +282,12 @@ void LSH::hash_from_file() {
 void LSH::save_data() {
   
   // 保存哈希表
-  this->s_p_hash_table << this->n_tables << " " << std::pow(2, this->n_functions) << std::endl;
+  this->s_p_hash_table << this->n_tables << " " 
+                       << std::pow(2, this->n_functions) << std::endl;
   for (int i = 0; i < this->n_tables; i++) {
 		for (int j = 0; j < std::pow(2, this->n_functions); j++) {
-			for (int k = 0; k < this->hashTables[i][j].size(); k++) {
-				if (k == 0)
-					this->s_p_hash_table << this->hashTables[i][j][k];
-				else
-					this->s_p_hash_table << " " << this->hashTables[i][j][k];
+			for (auto& i : this->hashTables[i][j]) {
+					this->s_p_hash_table << i << " ";
 			}
 			if (i == this->n_tables-1 && j == std::pow(2, this->n_functions)-1)
 				continue;
@@ -331,7 +347,6 @@ void LSH::query_from_file() {
 
 
 int LSH::hash_query(int t, int line) {
-  auto start = std::chrono::high_resolution_clock::now();
   this->move_to_line(this->qFile, line);
   double sum{0}, x{0.0};
   int pos{0};
@@ -350,10 +365,6 @@ int LSH::hash_query(int t, int line) {
     int a = std::pow(2, this->n_functions);
     pos %= a;
   }
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed1 = end - start;
-  this->oFile << "Item " << line << " hash query cost " << elapsed1.count()
-              << " seconds in Table " << t << std::endl;
   return pos;
 }
 
@@ -377,6 +388,7 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
     x_norm += x*x;
     y_norm += y*y;
   }
+
   x_norm = std::sqrt(x_norm);
   y_norm = std::sqrt(y_norm);
   if (std::abs(x_norm * y_norm) < 1e-6)
@@ -400,18 +412,20 @@ double LSH::nearest_query_cosine(int line) {
       double dis = this->calcute_cosine_distance(i, line);
       // 距离与项，按照第一项进行排序
       this->res[line].emplace(dis, i);
+      if (this->res[line].size() > this->n_query_number) {
+        this->res[line].pop();
+      }
     }
   }
+
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
   this->oFile << "NN LSH " << " Items:" << std::endl;
 
-  int cnt{0};
-  while (!this->res[line].empty() && cnt < this->n_query_number) {
+  while (!this->res[line].empty()) {
     this->oFile << " ==>> " << this->res[line].top().first 
                 << "\t" << this->res[line].top().second << std::endl;
     this->res[line].pop();
-    cnt++;
   }
   
   this->oFile << "time: LSH: " << elapsed1.count() << std::endl;

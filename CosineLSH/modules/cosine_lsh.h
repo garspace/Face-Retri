@@ -8,9 +8,12 @@
 #include <chrono>     // 计时
 #include <algorithm>  // 打乱序列
 #include <numeric>    // 递增序列
+#include <functional> // 小顶堆
 #include <queue>      // 优先级队列
 #include <utility>    // 使用 pair
 #include <sstream>    // 使用字符串流
+#include <list>       // 存储哈希结果的桶，vertor 会扩容
+#include <iomanip>    // 保留两位小数
 
 using PDI = std::pair<double, int>;
 
@@ -41,10 +44,10 @@ private:
   bool read{false};
 
   // 优先级队列，存储结果，选择相似度最接近的
-  std::vector<std::priority_queue<PDI> > res;
+  std::vector< std::priority_queue<PDI, std::vector<PDI>, std::greater<PDI>> > res;
 
   // 哈希表
-  std::vector<std::vector<std::vector<int> > > hashTables;
+  std::vector<std::vector<std::list<int> > > hashTables;
 
   // 二级哈希函数
   std::vector<std::vector<double> > hashFunction;
