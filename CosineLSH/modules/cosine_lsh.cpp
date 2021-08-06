@@ -24,26 +24,32 @@ void LSH::parse_config(std::string s) {
   int n_t;
 
   // 读取哈希表的数
+  this->move_to_line(temp, 0);
   temp >> n_t;
   this->n_tables = n_t;
 
   // 读取哈希函数的数目
+  this->move_to_line(temp, 1);
   temp >> n_t;
   this->n_functions = n_t;
 
   // 读取每张图片返回多少查询结果
+  this->move_to_line(temp, 2);
   temp >> n_t;
   this->n_query_number = n_t;
 
   // base file 路径
+  this->move_to_line(temp, 3);
   temp >> str;
   this->bFile.open(str);
 
   // query file 路径
+  this->move_to_line(temp, 4);
   temp >> str;
   this->qFile.open(str);
 
   // out file 路径
+  this->move_to_line(temp, 5);
   temp >> str;
   this->oFile.open(str);
 
@@ -61,6 +67,7 @@ void LSH::parse_config(std::string s) {
             << " X " << this->n_dim << std::endl;
 
   // 从文件读取哈希表
+  this->move_to_line(temp, 6);
   temp >> n_t;
   
   if (n_t == 1) {
@@ -78,11 +85,8 @@ void LSH::parse_config(std::string s) {
     // 读取数据
     this->read_data();
   }
-  if (n_t == 0) {
-    temp >> str;
-    temp >> str;
-    temp >> str;
-  }
+
+  this->move_to_line(temp, 7);
   // 保存文件的路径，默认为空
   temp >> n_t;
   // 保存哈希表等数据
@@ -118,6 +122,7 @@ void LSH::read_data() {
   this->r_p_hash_table >> n_t >> n_f;
   this->n_tables = n_t;
   this->n_functions = std::log2(n_f);
+  this->move_to_line(this->r_p_hash_table, 1);
 
   this->init_hash_table();
   int cnt{0}, x;
@@ -139,6 +144,7 @@ void LSH::read_data() {
   this->n_dim = n_f;
   this->hashFunction.resize(this->n_functions, std::vector<double>(this->n_dim));
 
+  this->move_to_line(this->r_p_hash_function, 1);
   for (int i = 0; i < this->n_functions; i++) {
     for (int j = 0; j < this->n_dim; j++) {
       this->r_p_hash_function >> y;
@@ -154,6 +160,8 @@ void LSH::read_data() {
   this->amplifyFunction.resize(this->n_tables, std::vector<int>(this->n_functions));
   this->oFile << "amplify function's dimension: " << this->n_tables 
             << " X " << this->n_functions << std::endl;
+  
+  this->move_to_line(this->r_p_amp_function, 1);
   for (int i = 0; i < this->n_tables; i++) {
     for (int j = 0; j < this->n_functions; j++) {
       this->r_p_amp_function >> x;
@@ -285,8 +293,8 @@ void LSH::save_data() {
                        << std::pow(2, this->n_functions) << std::endl;
   for (int i = 0; i < this->n_tables; i++) {
 		for (int j = 0; j < std::pow(2, this->n_functions); j++) {
-			for (auto& i : this->hashTables[i][j]) {
-					this->s_p_hash_table << i << " ";
+			for (auto& k : this->hashTables[i][j]) {
+					this->s_p_hash_table << k << " ";
 			}
 			if (i == this->n_tables-1 && j == std::pow(2, this->n_functions)-1)
 				continue;
@@ -402,10 +410,10 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
 double LSH::nearest_query_cosine(int line) {
   this->oFile << "Query: " << line << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
-
   for (int t = 0; t < this->n_tables; t++) {
     // 查询到桶
     int pos = hash_query(t, line);
+    
     // 遍历这个桶
     for (auto& i: this->hashTables[t][pos]) {
       double dis = this->calcute_cosine_distance(i, line);
@@ -419,6 +427,7 @@ double LSH::nearest_query_cosine(int line) {
 
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
+  
   this->oFile << "NN LSH " << " Items:" << std::endl;
 
   while (!this->res[line].empty()) {
