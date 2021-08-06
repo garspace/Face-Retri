@@ -228,6 +228,7 @@ void LSH::hash_from_file() {
   auto start = std::chrono::high_resolution_clock::now();
 
   // 处理每一条数据
+  this->set_pointer_begin(this->bFile);
   for (int line = 0; line < this->n_base_lines; line++) {
     if (line % 500 == 499) {
       auto end = std::chrono::high_resolution_clock::now();
@@ -235,8 +236,6 @@ void LSH::hash_from_file() {
       this->oFile << "After " << elapsed1.count() << " seconds, "
                 << line + 1 <<  " items has been hashed ! " << std::endl;
     }
-
-    this->move_to_line(this->bFile, line);
 
     // 空间换时间
     tmp.clear();
