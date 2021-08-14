@@ -1,8 +1,8 @@
-1
+5
 10
 5
-data/base
-data/query
-data/out
-1 data/hash_table data/hash_function data/amplify_function
-0 data/hash_table data/hash_function data/amplify_function
+../data/base
+../data/query
+../data/out
+0 ../data/hash_table ../data/hash_function ../data/amplify_function
+0 ../data/hash_table ../data/hash_function ../data/amplify_function

@@ -69,7 +69,7 @@ void LSH::parse_config(std::string s) {
   // 从文件读取哈希表
   this->move_to_line(temp, 6);
   temp >> n_t;
-  
+
   if (n_t == 1) {
     this->read = true;
 
@@ -107,6 +107,7 @@ void LSH::parse_config(std::string s) {
   if (this->read == true && this->save == true) {
     this->hash_from_file();
   }
+
   temp.close();
 }
 
@@ -225,6 +226,31 @@ void LSH::init_hash_function() {
   }
 }
 
+/*
+  单表哈希
+*/
+void LSH::hash_one_table(std::vector<double>& tmp, int t, int line) {
+  int pos{0};
+  double sum{0.0};
+
+  // 每一个函数
+  for (int f = 0; f < this->n_functions; f++) {
+    sum = 0;
+    for (int i = 0; i < this->n_dim; i++) {
+      sum += tmp[i] * this->hashFunction[ this->amplifyFunction[t][f] ][i];
+    }
+    if (sum > 0)
+      pos += std::pow(2, f);
+  }
+  // 越界处理
+  if (pos >= std::pow(2, this->n_functions)) {
+      // 2^9 = 511.9998 -> 511
+      int a = std::pow(2, this->n_functions);
+      pos %= a;
+  }
+  // 容器追加，避免处理哈希冲突
+  this->hashTables[t][pos].push_back(line);
+}
 
 /*
   由文件构建哈希表，放入某个表的 pos 位置的桶中
@@ -235,6 +261,8 @@ void LSH::hash_from_file() {
   std::vector<double> tmp;
   auto start = std::chrono::high_resolution_clock::now();
 
+  ThreadPool pool{this->n_tables};
+  pool.init();
   // 处理每一条数据
   this->set_pointer_begin(this->bFile);
   for (int line = 0; line < this->n_base_lines; line++) {
@@ -244,7 +272,6 @@ void LSH::hash_from_file() {
       this->oFile << "After " << elapsed1.count() << " seconds, "
                 << line + 1 <<  " items has been hashed ! " << std::endl;
     }
-
     // 空间换时间
     tmp.clear();
     for (int i = 0; i < this->n_dim; i++) {
@@ -254,28 +281,12 @@ void LSH::hash_from_file() {
 
     // 处理每一张表
     for (int t = 0; t < this->n_tables; t++) {
-      
-      pos = 0;
-
-      // 每一个函数
-      for (int f = 0; f < this->n_functions; f++) {
-        sum = 0;
-        for (int i = 0; i < this->n_dim; i++) {
-          sum += tmp[i] * this->hashFunction[ this->amplifyFunction[t][f] ][i];
-        }
-        if (sum > 0)
-          pos += std::pow(2, f);
-      }
-      // 越界处理
-      if (pos >= std::pow(2, this->n_functions)) {
-          // 2^9 = 511.9998 -> 511
-          int a = std::pow(2, this->n_functions);
-          pos %= a;
-      }
-      // 容器追加，避免处理哈希冲突
-      this->hashTables[t][pos].push_back(line);
+      // this->hash_one_table(tmp, t, line);
+      auto func = std::bind(&LSH::hash_one_table, this, tmp, t, line);
+      pool.submit(func);
     }
   }
+  pool.shutdown();
 
   // 保存数据
   if (this->save == true) {
@@ -339,20 +350,81 @@ void LSH::save_data() {
 
 
 /*
+  单表查询
+*/
+void LSH::query_one_table(int t, int line) {
+  // 查询到桶
+  {
+    std::lock_guard<std::mutex> ltx{this->mtx_io};
+    int pos = this->hash_query(t, line);
+    // 遍历这个桶
+    for (auto& i: this->hashTables[t][pos]) {
+      double dis = this->calcute_cosine_distance(i, line);
+      // 距离与项，按照第一项进行排序
+      this->res[line].emplace(dis, i);
+      if (this->res[line].size() > this->n_query_number * this->n_tables) {
+        this->res[line].pop();
+      }
+    }
+  }
+}
+
+
+/*
   对 query 文件的每一行进行查询
   记录查询的平均时间
 */
 void LSH::query_from_file() {
   double s{0.0};
+  this->n_query_lines = 1;
+  ThreadPool *pool = new ThreadPool{this->n_tables};
+  pool->init();
+  
+  auto start = std::chrono::high_resolution_clock::now();
   for (int line = 0; line < this->n_query_lines; line++) {
-    // 当前行的查询与计时
-    double t = this->nearest_query_cosine(line);
-    s += t;
+    for (int t = 0; t < this->n_tables; t++) {
+      auto func = std::bind(&LSH::query_one_table, this, t, line);
+      pool->submit(func);
+      // query_one_table(t, line);
+    }
+  }
+  pool->shutdown();
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed1 = end - start;
+  s += elapsed1.count();
+
+  delete pool;
+
+  for (int line = 0; line < this->n_query_lines; line++) {
+    {
+      std::lock_guard<std::mutex> ltx{this->mtx_io};
+      // 当前行的查询与计时
+      this->oFile << "Query: " << line << ", NN LSH Items:" 
+                  << std::endl;
+
+      int tmp{-2}, cnt{0};
+      while (!this->res[line].empty() && cnt < 5) {
+        if (tmp != this->res[line].top().second ) {
+          tmp = this->res[line].top().second;
+          this->oFile << " ==>> " << this->res[line].top().first 
+                      << "\t" << tmp << std::endl;
+          cnt++;
+        }
+        this->res[line].pop();
+      }
+      
+      // this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
+      this->oFile << "Item " << line << " has been queried" << std::endl;
+      this->oFile << "====================================================" << std::endl;
+    }
   }
   this->oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
 }
 
 
+/*
+  查询向量位于哪个桶
+*/
 int LSH::hash_query(int t, int line) {
   this->move_to_line(this->qFile, line);
   double sum{0}, x{0.0};
@@ -401,46 +473,6 @@ double LSH::calcute_cosine_distance(int base_line, int query_line) {
   if (std::abs(x_norm * y_norm) < 1e-6)
     return -1;
   return (product / (x_norm * y_norm));
-}
-
-
-/*
-  查询最为接近的几个结果，用优先级队列存储查询结果
-*/
-double LSH::nearest_query_cosine(int line) {
-  this->oFile << "Query: " << line << std::endl;
-  auto start = std::chrono::high_resolution_clock::now();
-  for (int t = 0; t < this->n_tables; t++) {
-    // 查询到桶
-    int pos = hash_query(t, line);
-    
-    // 遍历这个桶
-    for (auto& i: this->hashTables[t][pos]) {
-      double dis = this->calcute_cosine_distance(i, line);
-      // 距离与项，按照第一项进行排序
-      this->res[line].emplace(dis, i);
-      if (this->res[line].size() > this->n_query_number) {
-        this->res[line].pop();
-      }
-    }
-  }
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed1 = end - start;
-  
-  this->oFile << "NN LSH " << " Items:" << std::endl;
-
-  while (!this->res[line].empty()) {
-    this->oFile << " ==>> " << this->res[line].top().first 
-                << "\t" << this->res[line].top().second << std::endl;
-    this->res[line].pop();
-  }
-  
-  this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
-  this->oFile << "Item " << line << " has been queried" << std::endl;
-  this->oFile << "====================================================" << std::endl;
-
-  return elapsed1.count();
 }
 
 

@@ -15,10 +15,66 @@
 #include <list>       // 存储哈希结果的桶，vertor 会扩容
 #include <iomanip>    // 保留两位小数
 
+#include "ThreadPool.h"
+
 using PDI = std::pair<double, int>;
 
 class LSH {
+public:
+  // 构造函数 
+  LSH();
+  LSH(std::string);
+  LSH(const LSH &) = delete;
+  LSH(LSH &&) = delete;
+
+  LSH & operator=(const LSH &) = delete;
+  LSH & operator=(LSH &&) = delete;
+
+  // 解析配置文件
+  void parse_config(std::string s);
+  // 初始化哈希函数和哈希表
+  void init_hash_table();
+  void init_hash_function();
+
+  // 输入文件的行数、维度数
+  void get_n_lines();
+  void get_n_dimensions();
+
+  // 文件指针指向开始
+  void set_pointer_begin(std::ifstream& );
+  // 文件指针指向制定行
+  void move_to_line(std::ifstream& , int);
+
+  // 由 base 构建哈希表
+  void hash_from_file();
+  // 单表哈希
+  void hash_one_table(std::vector<double>&, int, int);
+
+  // 查询 query 数据
+  void query_from_file();
+  // 单桶查询
+  void query_one_table(int, int);
+
+  // 查找 query 落入哪个桶
+  int hash_query(int, int);
+
+  // 余弦距离相似度
+  double calcute_cosine_distance(int, int);
+
+  // 结束时关闭文件
+  void finish();
+
+  // 保存哈希表，每次构建都太慢了
+  void save_data();
+
+  // 读取文件，既然构建太慢，考虑直接读取哈希表和哈希函数实现查询
+  void read_data();
+
+  bool get_isRead() const;
+
 private:
+  std::mutex mtx_io;
+
   // 哈希函数的数量 
   int n_functions{0};
 
@@ -73,51 +129,4 @@ private:
   std::ifstream r_p_hash_table;
   std::ifstream r_p_hash_function;
   std::ifstream r_p_amp_function;
-
-public:
-  // 构造函数 
-  LSH();
-  LSH(std::string);
-
-  // 解析配置文件
-  void parse_config(std::string s);
-
-  // 初始化哈希函数和哈希表
-  void init_hash_table();
-  void init_hash_function();
-
-  // 输入文件的行数、维度数
-  void get_n_lines();
-  void get_n_dimensions();
-
-  // 文件指针指向开始
-  void set_pointer_begin(std::ifstream& );
-  // 文件指针指向制定行
-  void move_to_line(std::ifstream& , int);
-
-  // 由 base 构建哈希表
-  void hash_from_file();
-
-  // 查询 query 数据
-  void query_from_file();
-
-  // 查找 query 落入哪个桶
-  int hash_query(int, int);
-
-  // 最紧邻查询
-  double nearest_query_cosine(int);
-
-  // 余弦距离相似度
-  double calcute_cosine_distance(int, int);
-
-  // 结束时关闭文件
-  void finish();
-
-  // 保存哈希表，每次构建都太慢了
-  void save_data();
-
-  // 读取文件，既然构建太慢，考虑直接读取哈希表和哈希函数实现查询
-  void read_data();
-
-  bool get_isRead() const;
 };
