@@ -8,7 +8,8 @@ LSH::LSH(){
 }
 
 LSH::LSH(std::string s) {
-  this->parse_config(s);
+  config_path = s;
+  this->parse_config(config_path);
 }
 
 /*
@@ -59,6 +60,7 @@ void LSH::parse_config(std::string s) {
   this->get_n_dimensions();
 
   // 存储结果，query 有多少行，就存储多少结果
+  // 优先级队列，存储结果，选择相似度最接近的
   this->res.resize(this->n_query_lines);
 
   this->oFile << "Base file dimension : " << this->n_base_lines 
@@ -218,7 +220,7 @@ void LSH::init_hash_function() {
   
   std::vector<int> ivec(this->n_functions);
   std::iota(ivec.begin(), ivec.end(), 0);
-  std::srand ( unsigned ( std::time(0) ) );
+  std::srand ( unsigned ( 1 ) );
   for (int i = 0; i < this->n_tables; i++) {
     // 乱序并分配
     std::random_shuffle(ivec.begin(), ivec.end());
@@ -352,19 +354,31 @@ void LSH::save_data() {
 /*
   单表查询
 */
-void LSH::query_one_table(int t, int line) {
-  // 查询到桶
-  {
-    std::lock_guard<std::mutex> ltx{this->mtx_io};
-    int pos = this->hash_query(t, line);
-    // 遍历这个桶
-    for (auto& i: this->hashTables[t][pos]) {
-      double dis = this->calcute_cosine_distance(i, line);
-      // 距离与项，按照第一项进行排序
-      this->res[line].emplace(dis, i);
-      if (this->res[line].size() > this->n_query_number * this->n_tables) {
-        this->res[line].pop();
-      }
+void LSH::query_one_table(int t, int line, const std::vector<double>& tmp) {
+  auto s = std::chrono::high_resolution_clock::now();
+  double sum{0};
+  int pos{0};
+
+  for (int i = 0; i < this->n_functions; i++) {
+    sum = 0;
+    for (int j = 0; j < this->n_dim; j++) {
+      sum += tmp[j] * this->hashFunction[this->amplifyFunction[t][i]][j];
+    }
+    if (sum > 0)
+      pos += std::pow(2, i);
+  }
+  if (pos >= std::pow(2, this->n_functions)) {
+    int a = std::pow(2, this->n_functions);
+    pos %= a;
+  }
+
+  for (auto& i: this->hashTables[t][pos]) {
+    // std::cout << i << " ";
+    double dis = this->calcute_cosine_distance(i, tmp);
+    // 距离与项，按照第一项进行排序
+    this->res.emplace(line, dis, i);
+    if (this->res.size(line) > this->n_query_number * this->n_tables) {
+      this->res.pop(line);
     }
   }
 }
@@ -377,74 +391,56 @@ void LSH::query_one_table(int t, int line) {
 void LSH::query_from_file() {
   double s{0.0};
   this->n_query_lines = 1;
-  ThreadPool *pool = new ThreadPool{this->n_tables};
-  pool->init();
-  
+
+  ThreadPool pool{this->n_tables};
+  pool.init();
+
   auto start = std::chrono::high_resolution_clock::now();
   for (int line = 0; line < this->n_query_lines; line++) {
-    for (int t = 0; t < this->n_tables; t++) {
-      auto func = std::bind(&LSH::query_one_table, this, t, line);
-      pool->submit(func);
-      // query_one_table(t, line);
+    
+    std::vector<double> tmp;
+    this->move_to_line(this->qFile, line);
+    double t{0.0};
+    for (int i = 0; i < this->n_dim; i++) {
+      this->qFile >> t;
+      tmp.push_back(t);
     }
+
+    for (int t = 0; t < this->n_tables; t++) {
+      auto func = std::bind(&LSH::query_one_table, this, 
+            t, line, tmp);
+      pool.submit(func);
+      // query_one_table(t, line, pos);
+    }
+
   }
-  pool->shutdown();
+  pool.shutdown();
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed1 = end - start;
   s += elapsed1.count();
 
-  delete pool;
-
   for (int line = 0; line < this->n_query_lines; line++) {
-    {
-      std::lock_guard<std::mutex> ltx{this->mtx_io};
-      // 当前行的查询与计时
-      this->oFile << "Query: " << line << ", NN LSH Items:" 
-                  << std::endl;
+    // 当前行的查询与计时
+    this->oFile << "Query: " << line << ", NN LSH Items:" 
+                << std::endl;
 
-      int tmp{-2}, cnt{0};
-      while (!this->res[line].empty() && cnt < 5) {
-        if (tmp != this->res[line].top().second ) {
-          tmp = this->res[line].top().second;
-          this->oFile << " ==>> " << this->res[line].top().first 
-                      << "\t" << tmp << std::endl;
-          cnt++;
-        }
-        this->res[line].pop();
+    int tmp{-2}, cnt{0};
+    while (!this->res.empty(line) && cnt < this->n_query_number) {
+      if (tmp != this->res.top(line).second) {
+        tmp = this->res.top(line).second;
+        this->oFile << " ==>> " << this->res.top(line).first
+                    << "\t" << this->res.top(line).second << std::endl;
+        cnt++;
       }
-      
-      // this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
-      this->oFile << "Item " << line << " has been queried" << std::endl;
-      this->oFile << "====================================================" << std::endl;
+      this->res.pop(line);
     }
+    
+    // this->oFile << "time: LSH: " << elapsed1.count() << std::endl;
+    this->oFile << "Item " << line << " has been queried" << std::endl;
+    this->oFile << "====================================================" << std::endl;
+
   }
   this->oFile << "Average Time: " << s / this->n_query_lines << " seconds. ";
-}
-
-
-/*
-  查询向量位于哪个桶
-*/
-int LSH::hash_query(int t, int line) {
-  this->move_to_line(this->qFile, line);
-  double sum{0}, x{0.0};
-  int pos{0};
-
-  for (int i = 0; i < this->n_functions; i++) {
-    sum = 0;
-    for (int j = 0; j < this->n_dim; j++) {
-      this->qFile >> x;
-      sum += x * this->hashFunction[this->amplifyFunction[t][i]][j];
-    }
-    this->move_to_line(this->qFile, line);
-    if (sum > 0)
-      pos += std::pow(2, i);
-  }
-  if (pos >= std::pow(2, this->n_functions)) {
-    int a = std::pow(2, this->n_functions);
-    pos %= a;
-  }
-  return pos;
 }
 
 
@@ -454,24 +450,37 @@ int LSH::hash_query(int t, int line) {
     0 毫无关系
     1 正相关
 */
-double LSH::calcute_cosine_distance(int base_line, int query_line) {
-  double dis{0}, x{0.0}, y{0.0}, product{0.0}, x_norm{0.0}, y_norm{0.0};
+double LSH::calcute_cosine_distance(int line, const std::vector<double>& v2) {
+  double dis{0}, x{0.0}, product{0.0}, x_norm{0.0}, y_norm{0.0};
 
-  this->move_to_line(this->qFile, query_line);
-  this->move_to_line(this->bFile, base_line);
+  std::ifstream temp, b;
+  temp.open(this->config_path);
+  this->move_to_line(temp, 3);
+  std::string str;
+  temp >> str;
+  temp.close();
+
+  b.open(str);
+  this->move_to_line(b, line);
+
+  std::vector<double> v1;
+  for (int i = 0; i < this->n_dim; i++) {
+    b >> x;
+    v1.push_back(x);
+  }
+  b.close();
   
   for (int i = 0; i < this->n_dim; i++) {
-    this->bFile >> x;
-    this->qFile >> y;
-    product += x*y;
-    x_norm += x*x;
-    y_norm += y*y;
+    product += v1[i] * v2[i];
+    x_norm += v1[i] * v1[i];
+    y_norm += v2[i] * v2[i];
   }
 
   x_norm = std::sqrt(x_norm);
   y_norm = std::sqrt(y_norm);
   if (std::abs(x_norm * y_norm) < 1e-6)
     return -1;
+
   return (product / (x_norm * y_norm));
 }
 

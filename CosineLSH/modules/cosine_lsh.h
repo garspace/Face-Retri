@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iostream>   // 输入输出
-#include <vector>     // 哈希函数和哈希表
 #include <cmath>      // pow 运算
 #include <fstream>    // 文件
 #include <random>     // 随机数
@@ -9,21 +8,20 @@
 #include <algorithm>  // 打乱序列
 #include <numeric>    // 递增序列
 #include <functional> // 小顶堆
-#include <queue>      // 优先级队列
 #include <utility>    // 使用 pair
 #include <sstream>    // 使用字符串流
 #include <list>       // 存储哈希结果的桶，vertor 会扩容
 #include <iomanip>    // 保留两位小数
 
 #include "ThreadPool.h"
-
-using PDI = std::pair<double, int>;
+#include "SafeRes.h"
 
 class LSH {
 public:
   // 构造函数 
   LSH();
   LSH(std::string);
+  
   LSH(const LSH &) = delete;
   LSH(LSH &&) = delete;
 
@@ -53,13 +51,10 @@ public:
   // 查询 query 数据
   void query_from_file();
   // 单桶查询
-  void query_one_table(int, int);
-
-  // 查找 query 落入哪个桶
-  int hash_query(int, int);
+  void query_one_table(int, int, const std::vector<double>&);
 
   // 余弦距离相似度
-  double calcute_cosine_distance(int, int);
+  double calcute_cosine_distance(int, const std::vector<double>&);
 
   // 结束时关闭文件
   void finish();
@@ -73,6 +68,9 @@ public:
   bool get_isRead() const;
 
 private:
+
+  std::string config_path{""};
+
   std::mutex mtx_io;
 
   // 哈希函数的数量 
@@ -100,7 +98,7 @@ private:
   bool read{false};
 
   // 优先级队列，存储结果，选择相似度最接近的
-  std::vector< std::priority_queue<PDI, std::vector<PDI>, std::greater<PDI>> > res;
+  SafeRes res;
 
   // 哈希表
   std::vector<std::vector<std::list<int> > > hashTables;

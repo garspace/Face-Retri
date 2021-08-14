@@ -41,16 +41,10 @@ private:
       // If the task queue is not empty, continue obtain task from task queue, 
       // the multithread continues execution until the queue is empty
       while (!m_pool->m_queue.empty()) {
-        {
-          // std::lock_guard<std::mutex> lock(m_pool->m_conditional_mutex);
-          // std::cout << "Tasks Queue Size : " << m_pool->m_queue.size() << std::endl;
-          dequeued = m_pool->m_queue.dequeue(func);
-          if (dequeued) {
-            func();
-          }
-        }
+        dequeued = m_pool->m_queue.dequeue(func);
+        if (dequeued)
+          func();
       }
-
     }
   };
 
@@ -108,7 +102,7 @@ public:
     m_queue.enqueue(wrapper_func);
 
     // Wake up one thread if its waiting
-    m_conditional_lock.notify_all();
+    m_conditional_lock.notify_one();
 
     // Return future from promise
     return task_ptr->get_future();
