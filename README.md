@@ -33,6 +33,8 @@ sudo pacman -S opencv vtk hdfs5
 
 ## 部署 :fire:
 
-暂时按照如下结构部署到服务器，`Java` 施工中。
+暂时按照如下结构部署，施工中。
 
 ![](doc/module.png)
+
+- [ ] 实现 `TimeLRU`, 即：响应最近的查询，如果一个查询超时，那么取消这个任务。
